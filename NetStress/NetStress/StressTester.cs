@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
@@ -26,16 +27,32 @@ namespace NetStress
             {
                 // Multiply time factor
                 TimeSpan reqTime = r.RelativeTime.Multiply(timeFactor);
-                Console.WriteLine("Next req at: " + reqTime);
+                //Console.WriteLine("Next req at: " + reqTime);
                 while (DateTime.Now - start < reqTime)
                 {
                     System.Threading.Thread.Sleep(1);
                 }
-                Task<StressResult> t = Task.Factory.StartNew(() => PerformRequest(r));
+                Task<StressResult> t = Task.Factory.StartNew(() => PerformRequest(r)) ;
+                Task t2 = t.ContinueWith((xx) => Report(xx.Result));
                 tasks.Add(t);
             }
             Task.WaitAll(tasks.ToArray());
             return tasks.Select(t => t.Result);
+        }
+
+        private static StressResult Report(StressResult r)
+        {
+            var data = new List<string>()
+            {
+                r.Request.Id,
+                r.Success.ToString(),
+                r.HttpStatusCode.ToString(),
+                r.TimeTaken.ToString(),
+                r.ContentLength.ToString(),
+                r.Request.Url
+            };
+            Console.WriteLine(string.Join(";", data));
+            return r;
         }
 
         private static StressResult PerformRequest(StressRequest req)
@@ -52,14 +69,18 @@ namespace NetStress
                 request.Method = "GET";
                 request.KeepAlive = true;
                 response = (HttpWebResponse)request.GetResponse();
+                using(Stream stream = response.GetResponseStream())
+                { 
+                    using(MemoryStream ms = new MemoryStream() )
+                    {
+                        stream.CopyTo(ms);
+                        result.ContentLength = ms.Length;
+                    }
+                }
                 watch.Stop();
-                
-                // DEBUG
-                Console.WriteLine(watch.ElapsedMilliseconds);
                 
                 result.TimeTaken = watch.ElapsedMilliseconds;
                 result.HttpStatusCode = response.StatusCode;
-                result.ContentLength = response.ContentLength;
                 result.Success = true;
                 return result;
             }
