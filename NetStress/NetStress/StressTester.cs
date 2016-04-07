@@ -11,7 +11,20 @@ namespace NetStress
 {
     public class StressTester
     {
-        public static IEnumerable<StressResult> RunTest(IEnumerable<StressRequest> requests, double timeFactor, bool ordered = true)
+        private List<string> _keepHeaders = new List<string>();
+
+        public List<string> KeepHeaders
+        {
+            get { return _keepHeaders; } 
+            set { _keepHeaders = value; }
+        }
+
+        public StressTester()
+        {
+            
+        }
+
+        public IEnumerable<StressResult> RunTest(IEnumerable<StressRequest> requests, double timeFactor, bool ordered = false)
         {
             // Inspired by http://stackoverflow.com/questions/16194054/is-async-httpclient-from-net-4-5-a-bad-choice-for-intensive-load-applications
             ServicePointManager.DefaultConnectionLimit = 100;
@@ -40,7 +53,7 @@ namespace NetStress
             return tasks.Select(t => t.Result);
         }
 
-        private static StressResult Report(StressResult r)
+        private StressResult Report(StressResult r)
         {
             var data = new List<string>()
             {
@@ -51,11 +64,16 @@ namespace NetStress
                 r.ContentLength.ToString(),
                 r.Request.Url
             };
+            if (r.ResponseHeaders != null)
+            {
+                data = data.Concat(r.ResponseHeaders).ToList();
+            }
+
             Console.WriteLine(string.Join(";", data));
             return r;
         }
 
-        private static StressResult PerformRequest(StressRequest req)
+        private StressResult PerformRequest(StressRequest req)
         {
             HttpWebRequest request = null;
             HttpWebResponse response = null;
@@ -82,6 +100,17 @@ namespace NetStress
                 result.TimeTaken = watch.ElapsedMilliseconds;
                 result.HttpStatusCode = response.StatusCode;
                 result.Success = true;
+                if (this.KeepHeaders.Count > 0)
+                {
+                    result.ResponseHeaders = new List<string>();
+                    Dictionary<string, string> dic = response.Headers.AllKeys.ToDictionary( h => h, h => response.Headers[h]);
+                    foreach (var kh in this.KeepHeaders)
+                    {
+                        string value = String.Empty;
+                        dic.TryGetValue(kh, out value);
+                        result.ResponseHeaders.Add(value);
+                    }
+                }
                 return result;
             }
             catch (Exception e)

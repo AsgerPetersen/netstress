@@ -19,6 +19,8 @@ namespace NetStress
 
         public StressRequest Request { get; set; }
 
+        public List<string> ResponseHeaders { get; set; } 
+
         public StressResult(StressRequest request)
         {
             this.Request = request;
